@@ -17,5 +17,5 @@ steel. Make sure to provide fuel, it will auto-refuel when out.
 
 
 ## Discord Webhook
- * [source](./discord/discord.lua)
+ * [discord.lua](./discord/discord.lua)
 Send messages to Discord using webhooks! 
