@@ -1,26 +1,58 @@
--- Version HEAD
-local defHeaders = {
-    ["Content-Type"] = "application/json"
+local discord = {
+    headers = {
+        ["Content-Type"] = "application/json",
+    },
+    storage = {
+        name = ".discord",
+        webhook = "webhook",
+        username = "username",
+        monitors = "monitors",
+    },
 }
-local monitors = settings.get("discord.monitors", {"self"})
 
+function discord.init()
+    local username, webhook = ""
+    local monitors = {"self"}
 
-function clearAll()
-    for i,monitor in ipairs(monitors) do
-        if (monitor == "self") then
-            term.setCursorBlink(true)
-            term.clear()
-            term.setCursorPos(1, 1)
-        else
-            peripheral.call(monitor, "setCursorBlink", true)
-            peripheral.call(monitor, "clear")
-            peripheral.call(monitor, "setCursorPos", 1, 1)
-        end
+    settings.load(discord.storage.name)
+    
+    username = settings.get(discord.storage.username, webhook)
+    webhook = settings.get(discord.storage.webhook, username)
+    monitors = settings.get(discord.storage.monitors, monitors)
+        
+    if (string.len(username) == 0) then
+        username = discord.prompt("Enter your username: ")
+        settings.set(discord.storage.username, username)
+    end 
+    
+    if (string.len(webhook) == 0) then
+        webhook = discord.prompt("Enter Webhook: ")
+        settings.set(discord.storage.webhook, webhook)
     end
+
+    settings.save(discord.storage.name)
+    discord.clearAll(monitors)
+
+    return username, webhook, monitors
 end
 
 
-function writeAll(text)
+function discord.clearAll(monitors)
+    for i,monitor in ipairs(monitors) do
+        if (monitor == "self") then
+            term.redirect(term.native())
+        else
+            term.redirect(peripheral.wrap(monitor))
+        end
+        term.setCursorBlink(true)
+        term.clear()
+        term.setCursorPos(1, 1)
+    end
+    term.redirect(term.native())
+end
+
+
+function discord.writeAll(monitors, text)
     for i,monitor in ipairs(monitors) do
         if (monitor == "self") then
             term.redirect(term.native())
@@ -34,7 +66,7 @@ function writeAll(text)
 end
 
 
-function writeOthers(text)
+function discord.writeOthers(monitors, text)
     for i,monitor in ipairs(monitors) do
         if (monitor ~= "self") then
             term.redirect(peripheral.wrap(monitor))
@@ -46,7 +78,7 @@ function writeOthers(text)
 end
 
 
-function send_message(webhook, username, content) 
+function discord.send_message(webhook, username, content) 
     if (content == nil) then
         content = ""
     end
@@ -56,72 +88,61 @@ function send_message(webhook, username, content)
         ["content"] = content
     }
     local serialized = textutils.serializeJSON(body)
-    local res = http.post(webhook, serialized, defHeaders)
+    local res = http.post(webhook, serialized, discord.headers)
 
         
     if (res == nil) then
-        writeAll("Something went wrong\n")
-        return
+        return nil
     end
     
-    local status = res.getResponseCode()
-
-    
-    if (status == 200 or status == 204) then
-        writeAll("Message Sent!\n")
-    else
-        writeAll("Something went wrong [" .. status .. "]\n")
-    end
+    return res.getResponseCode()
 end
 
 
-function prompt(dialogue)
-    writeAll(dialogue)
+function discord.prompt(monitors, dialogue)
+    discord.writeAll(monitors, dialogue)
     local result = read()
-    writeOthers(result .. "\n")
+    discord.writeOthers(monitors, result .. "\n")
     return result
 end
 
 
 function main()
-    clearAll()
-    settings.load(".discord.json")
-    local username = settings.get("discord.username", "")
-    local webhook = settings.get("discord.webhook", "")
-        
-    if (string.len(username) == 0) then
-        username = prompt("Enter your username: ")
-        settings.set("discord.username", username)
-    end 
-    
-    if (string.len(webhook) == 0) then
-        webhook = prompt("Enter Webhook: ")
-        settings.set("discord.webhook", webhook)
-    end
+    local username, webhook, monitors = discord.init()
+    discord.clearAll(monitors)
 
-    settings.save(".discord.json")
-    clearAll()
 
     local message = ""
 
-    writeAll("Type \".help\" for commands\n\n")        
+    discord.writeAll(monitors, "Type \".help\" for commands\n\n")        
 
     while (true) do
-        message = prompt(username .. ": ")
+        message = discord.prompt(monitors, username .. ": ")
         
         if (message == ".help") then
-            writeAll("Commands:\n")
-            writeAll(" * .setname\n")
-            writeAll(" * .exit\n")
+            discord.writeAll(monitors, "Commands:\n")
+            discord.writeAll(monitors, " * .setname\n")
+            discord.writeAll(monitors, " * .exit\n")
         elseif (message == ".setname") then
-            writeAll("Enter your name: ")
-            username = read()
-            settings.set("discord.username", username)
-            settings.save(storage)
+            username = discord.prompt("Enter your name: ")
+            settings.set(discord.storage.username, username)
+            settings.save(discord.storage.name)
         elseif (message == ".exit") then
             break
         else
-            send_message(webhook, username, message)
+            local res = discord.send_message(webhook, username, message)
+            local err
+
+            if res ~= 200 and res ~= 204 then
+                if res == nil then
+                    err = "Something went wrong.\n"
+                else
+                    err = "Something went wrong. [" .. res .. "]\n"
+                end
+                discord.writeAll(monitors, err)
+            else
+                discord.writeAll(monitors, "Message sent.")
+            end
         end
     end
 end
