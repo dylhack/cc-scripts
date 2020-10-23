@@ -1,3 +1,4 @@
+-- Version 2
 local discord = {
     headers = {
         ["Content-Type"] = "application/json",
@@ -6,27 +7,42 @@ local discord = {
         name = ".discord",
         webhook = "webhook",
         username = "username",
-        monitors = "monitors",
     },
 }
 
+
+function discord.getMonitors()
+    local i = 2
+    local monitors = {
+        "self",
+    }
+
+    peripheral.find("monitor", function (_n, obj)
+        monitors[i] = obj
+        i = i + 1
+    end)
+
+    return monitors
+end
+
+
 function discord.init()
-    local username, webhook = ""
-    local monitors = {"self"}
+    local username = ""
+    local webhook = ""
+    local monitors = discord.getMonitors()
 
     settings.load(discord.storage.name)
     
     username = settings.get(discord.storage.username, webhook)
     webhook = settings.get(discord.storage.webhook, username)
-    monitors = settings.get(discord.storage.monitors, monitors)
         
     if (string.len(username) == 0) then
-        username = discord.prompt("Enter your username: ")
+        username = discord.prompt(monitors, "Enter your username: ")
         settings.set(discord.storage.username, username)
     end 
     
     if (string.len(webhook) == 0) then
-        webhook = discord.prompt("Enter Webhook: ")
+        webhook = discord.prompt(monitors, "Enter Webhook: ")
         settings.set(discord.storage.webhook, webhook)
     end
 
@@ -42,7 +58,7 @@ function discord.clearAll(monitors)
         if (monitor == "self") then
             term.redirect(term.native())
         else
-            term.redirect(peripheral.wrap(monitor))
+            term.redirect(monitor)
         end
         term.setCursorBlink(true)
         term.clear()
@@ -57,7 +73,7 @@ function discord.writeAll(monitors, text)
         if (monitor == "self") then
             term.redirect(term.native())
         else
-            term.redirect(peripheral.wrap(monitor))
+            term.redirect(monitor)
         end
 
         write(text)
@@ -69,7 +85,7 @@ end
 function discord.writeOthers(monitors, text)
     for i,monitor in ipairs(monitors) do
         if (monitor ~= "self") then
-            term.redirect(peripheral.wrap(monitor))
+            term.redirect(monitor)
         end
         
         write(text)
@@ -124,7 +140,7 @@ function main()
             discord.writeAll(monitors, " * .setname\n")
             discord.writeAll(monitors, " * .exit\n")
         elseif (message == ".setname") then
-            username = discord.prompt("Enter your name: ")
+            username = discord.prompt(monitors, "Enter your name: ")
             settings.set(discord.storage.username, username)
             settings.save(discord.storage.name)
         elseif (message == ".exit") then
@@ -141,11 +157,10 @@ function main()
                 end
                 discord.writeAll(monitors, err)
             else
-                discord.writeAll(monitors, "Message sent.")
+                discord.writeAll(monitors, "Message sent.\n")
             end
         end
     end
 end
-
 
 main()
